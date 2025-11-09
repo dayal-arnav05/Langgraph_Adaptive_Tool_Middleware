@@ -18,7 +18,6 @@ from src.resilient_executor import ResilientToolExecutor, ExecutionResult
 from src.circuit_breaker import ToolCircuitBreaker, CircuitBreakerConfig
 from src.error_feedback import ErrorFeedbackLoop
 from src.observability import ToolObservability
-from src.tools import get_tools_for_llm, execute_tool
 
 
 class ProductionToolMiddleware:
@@ -199,8 +198,16 @@ class ProductionToolMiddleware:
         
         tool_name = tool_call.get("name", "unknown")
         
+        # Build available tools list from actual tools (for error feedback)
         if available_tools is None:
-            available_tools = get_tools_for_llm()
+            available_tools = []
+            for name, tool in self._tool_map.items():
+                # Build basic tool schema for error feedback
+                tool_info = {
+                    "name": name,
+                    "description": getattr(tool, 'description', f"Tool: {name}")
+                }
+                available_tools.append(tool_info)
         
         # Start observability span
         span_id = None
@@ -253,9 +260,9 @@ class ProductionToolMiddleware:
         
         tool_name = tool_call.get("name", "")
         
-        # Create executor function that calls REAL tools
+        # Execute the tool
         async def executor_func(call):
-            return await self._execute_real_tool(call["name"], call.get("arguments", {}))
+            return await self._execute_tool(call["name"], call.get("arguments", {}))
         
         # Attempt execution with retry
         exec_result: ExecutionResult = await self.executor.execute_with_retry(
@@ -333,15 +340,14 @@ class ProductionToolMiddleware:
                 "metadata": metadata
             }
     
-    async def _execute_real_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute the ACTUAL tool (not a mock).
+        Execute a tool.
         
         Supports:
         - Custom tool_executor function
         - LangChain tools (with .ainvoke or .invoke)
         - Any callable tool
-        - Falls back to mock tools if no real tools provided
         """
         # Use custom executor if provided
         if self.tool_executor:
@@ -388,15 +394,11 @@ class ProductionToolMiddleware:
                     "error": f"Tool execution failed: {str(e)}"
                 }
         
-        # Fallback to mock tools (for testing/demo purposes)
-        import warnings
-        warnings.warn(
-            f"No real tool found for '{tool_name}'. Using mock execution. "
-            "Pass real tools to ProductionToolMiddleware(tools=[...]) for production use.",
-            UserWarning
-        )
-        from src.tools import execute_tool
-        return execute_tool(tool_name, arguments)
+        # Tool not found
+        return {
+            "success": False,
+            "error": f"Tool '{tool_name}' not found. Available tools: {list(self._tool_map.keys())}"
+        }
     
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics"""

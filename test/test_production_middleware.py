@@ -19,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.production_middleware import ProductionToolMiddleware
-from src.tools import get_tools_for_llm
+from src.tools import get_tools_for_llm  # Using mock tools for testing - that's the point!
 
 
 # Simulate various failure scenarios

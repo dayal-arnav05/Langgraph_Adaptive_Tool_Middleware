@@ -21,7 +21,7 @@ from langchain_openai import ChatOpenAI
 
 from src.production_middleware import ProductionToolMiddleware
 from src.langgraph_integration import create_resilient_tool_node, AgentState
-from src.tools import get_tools_for_llm
+from src.tools import get_tools_for_llm  # Mock tools for demo - replace with YOUR tools!
 
 
 def should_continue(state: AgentState) -> str:
@@ -35,7 +35,7 @@ def should_continue(state: AgentState) -> str:
 async def call_model(state: AgentState) -> dict:
     """Call LLM with tools"""
     messages = state["messages"]
-    tools = get_tools_for_llm()
+    tools = get_tools_for_llm()  # TODO: Replace with your actual tools!
     
     model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     model_with_tools = model.bind_tools(tools)

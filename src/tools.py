@@ -1,7 +1,13 @@
 """
-Sample Tool Definitions for Testing
+Mock Tools for TESTING ONLY
 
-Defines a set of sample tools with clear schemas for testing HiTEC framework.
+These are FAKE tools used ONLY for testing the middleware's resilience features.
+They simulate tool execution with fake data and injected failures.
+
+⚠️  DO NOT USE IN PRODUCTION ⚠️
+
+For production, pass YOUR actual tools to ProductionToolMiddleware:
+    middleware = ProductionToolMiddleware(tools=[your_tools])
 """
 
 from typing import Dict, Any, List, Optional
