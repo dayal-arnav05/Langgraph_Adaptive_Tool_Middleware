@@ -1,0 +1,72 @@
+langgraph-tool-middleware/
+│
+├── 📁 src/                                # Production middleware
+│   ├── production_middleware.py           # Main orchestrator ⭐
+│   ├── resilient_executor.py              # Retry + timeout logic
+│   ├── circuit_breaker.py                 # Circuit breaker pattern
+│   ├── error_feedback.py                  # LLM error correction
+│   ├── observability.py                   # Metrics & monitoring
+│   ├── tools.py                           # Tool definitions
+│   └── test_dataset.py                    # Test cases
+│
+├── 📁 examples/                           # Usage examples
+│   ├── langgraph_integration.py           # Full LangGraph example ⭐
+│   └── simple_usage.py                    # Standalone usage
+│
+├── 📁 test/                               # Test scripts
+│   ├── compare.py                         # Visual demo (baseline vs middleware) ⭐
+│   ├── test_production_middleware.py      # Quick validation
+│   ├── test_at_scale.py                   # Scale testing
+│   └── comprehensive_test.py              # Full suite (34K tests)
+│
+├── 📁 test_results/                       # Test results
+│   ├── TEST_SUMMARY.md                    # 34K test results ⭐
+│   ├── PRODUCTION_SOLUTION.md             # Architecture docs
+│   └── PRODUCTION_TOOL_FAILURES.md        # Failure analysis
+│
+├── 📄 README.md                           # Quick start ⭐
+├── 📄 INSTALL.md                          # Installation guide
+├── 📄 USAGE.md                            # Detailed usage
+├── 📄 LICENSE                             # MIT license
+├── 📄 setup.py                            # Package setup
+├── 📄 pyproject.toml                      # Modern Python packaging
+├── 📄 MANIFEST.in                         # Package manifest
+├── 📄 requirements.txt                    # Dependencies
+└── 📄 .env                                # API keys (you create this)
+
+═══════════════════════════════════════════════════════════════════════
+INSTALLATION
+═══════════════════════════════════════════════════════════════════════
+
+# From source (development)
+pip install -e .
+
+# Once published to PyPI
+pip install langgraph-tool-middleware
+
+═══════════════════════════════════════════════════════════════════════
+EXAMPLES
+═══════════════════════════════════════════════════════════════════════
+
+# LangGraph integration
+python examples/langgraph_integration.py
+
+# Simple standalone usage
+python examples/simple_usage.py
+
+# Visual comparison demo
+python test/compare.py 20
+
+═══════════════════════════════════════════════════════════════════════
+TESTING
+═══════════════════════════════════════════════════════════════════════
+
+# Run full test suite (34K tests)
+python test/comprehensive_test.py
+
+# Scale test (custom size)
+echo "5000" | python test/test_at_scale.py
+
+# Quick validation
+python test/test_production_middleware.py
+

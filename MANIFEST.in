@@ -1,0 +1,21 @@
+# Include important files in package distribution
+include README.md
+include LICENSE
+include INSTALL.md
+include requirements.txt
+
+# Include test files
+recursive-include test *.py
+
+# Include examples
+recursive-include examples *.py
+
+# Include test results documentation
+recursive-include test_results *.md
+
+# Exclude unnecessary files
+global-exclude __pycache__
+global-exclude *.py[co]
+global-exclude .DS_Store
+global-exclude *.so
+
