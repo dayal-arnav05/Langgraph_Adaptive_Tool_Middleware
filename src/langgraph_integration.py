@@ -34,23 +34,42 @@ def create_resilient_tool_node(middleware, tools=None):
         from src.production_middleware import ProductionToolMiddleware
         from src.langgraph_integration import create_resilient_tool_node
         
-        # Initialize middleware
+        # Option 1: Pass tools to middleware (RECOMMENDED)
+        tools = [your_weather_tool, your_search_tool, ...]
         middleware = ProductionToolMiddleware(
+            tools=tools,  # Your actual tools!
             enable_circuit_breaker=True,
-            enable_error_feedback=True,
             max_retries=3
         )
+        workflow.add_node("tools", create_resilient_tool_node(middleware))
         
-        # Add to your graph (ONE LINE!)
+        # Option 2: Pass tools to this function
+        middleware = ProductionToolMiddleware(max_retries=3)
+        workflow.add_node("tools", create_resilient_tool_node(middleware, tools=tools))
+        
+        # Option 3: Custom executor
+        async def my_executor(tool_name, args):
+            # Your custom tool execution logic
+            return result
+        
+        middleware = ProductionToolMiddleware(tool_executor=my_executor)
         workflow.add_node("tools", create_resilient_tool_node(middleware))
     
     Args:
         middleware: ProductionToolMiddleware instance
-        tools: Optional list of tools (not currently used, for compatibility)
+        tools: Optional list of actual tools to execute
     
     Returns:
         Async function compatible with LangGraph's add_node()
     """
+    
+    # If tools provided here, add them to middleware
+    if tools and not middleware.tools:
+        middleware.tools = tools
+        middleware._tool_map = {}
+        for tool in tools:
+            tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', str(tool))
+            middleware._tool_map[tool_name] = tool
     
     if not LANGCHAIN_AVAILABLE:
         raise ImportError(

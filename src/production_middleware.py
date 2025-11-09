@@ -34,6 +34,8 @@ class ProductionToolMiddleware:
     
     def __init__(
         self,
+        tools: Optional[List[Any]] = None,
+        tool_executor: Optional[callable] = None,
         model: str = "gpt-4o-mini",
         provider: str = "openai",
         max_retries: int = 3,
@@ -41,8 +43,32 @@ class ProductionToolMiddleware:
         enable_error_feedback: bool = True,
         enable_observability: bool = True
     ):
+        """
+        Initialize middleware.
+        
+        Args:
+            tools: List of actual tools to execute (LangChain tools, custom tools, etc.)
+            tool_executor: Custom function to execute tools. If provided, this is used instead of tools list.
+                          Signature: async def executor(tool_name: str, arguments: dict) -> dict
+            model: Model for error correction
+            provider: Provider for error correction
+            max_retries: Max retry attempts
+            enable_circuit_breaker: Enable circuit breaker
+            enable_error_feedback: Enable LLM-driven error correction
+            enable_observability: Enable metrics tracking
+        """
         self.model = model
         self.provider = provider
+        self.tools = tools or []
+        self.tool_executor = tool_executor
+        
+        # Build tool lookup
+        self._tool_map = {}
+        if self.tools:
+            for tool in self.tools:
+                # Support both LangChain tools and custom tools
+                tool_name = getattr(tool, 'name', None) or getattr(tool, '__name__', str(tool))
+                self._tool_map[tool_name] = tool
         
         # Core components
         self.executor = ResilientToolExecutor(max_retries=max_retries)
@@ -227,9 +253,9 @@ class ProductionToolMiddleware:
         
         tool_name = tool_call.get("name", "")
         
-        # Mock executor function (in production, this would call real APIs)
+        # Create executor function that calls REAL tools
         async def executor_func(call):
-            return execute_tool(call["name"], call.get("arguments", {}))
+            return await self._execute_real_tool(call["name"], call.get("arguments", {}))
         
         # Attempt execution with retry
         exec_result: ExecutionResult = await self.executor.execute_with_retry(
@@ -306,6 +332,71 @@ class ProductionToolMiddleware:
                 "error_type": exec_result.error_type,
                 "metadata": metadata
             }
+    
+    async def _execute_real_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute the ACTUAL tool (not a mock).
+        
+        Supports:
+        - Custom tool_executor function
+        - LangChain tools (with .ainvoke or .invoke)
+        - Any callable tool
+        - Falls back to mock tools if no real tools provided
+        """
+        # Use custom executor if provided
+        if self.tool_executor:
+            try:
+                result = await self.tool_executor(tool_name, arguments)
+                return {"success": True, "result": result}
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+        
+        # Look up tool in tool map
+        if tool_name in self._tool_map:
+            tool = self._tool_map[tool_name]
+            
+            try:
+                # Try async invoke (LangChain tools)
+                if hasattr(tool, 'ainvoke'):
+                    result = await tool.ainvoke(arguments)
+                    return {"success": True, "result": result}
+                
+                # Try sync invoke
+                elif hasattr(tool, 'invoke'):
+                    result = tool.invoke(arguments)
+                    return {"success": True, "result": result}
+                
+                # Try calling as async function
+                elif asyncio.iscoroutinefunction(tool):
+                    result = await tool(**arguments)
+                    return {"success": True, "result": result}
+                
+                # Try calling as regular function
+                elif callable(tool):
+                    result = tool(**arguments)
+                    return {"success": True, "result": result}
+                
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Tool {tool_name} is not callable"
+                    }
+            
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Tool execution failed: {str(e)}"
+                }
+        
+        # Fallback to mock tools (for testing/demo purposes)
+        import warnings
+        warnings.warn(
+            f"No real tool found for '{tool_name}'. Using mock execution. "
+            "Pass real tools to ProductionToolMiddleware(tools=[...]) for production use.",
+            UserWarning
+        )
+        from src.tools import execute_tool
+        return execute_tool(tool_name, arguments)
     
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics"""
