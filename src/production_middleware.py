@@ -56,6 +56,78 @@ class ProductionToolMiddleware:
         self.correction_count = 0
         self.circuit_break_count = 0
     
+    async def execute_langchain_tool(
+        self,
+        tool_call: Dict[str, Any],
+        user_query: str,
+        available_tools: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute tool in LangChain/LangGraph format (uses 'args' instead of 'arguments').
+        
+        This is the recommended method for LangGraph integration.
+        Handles format conversion and returns clean content for ToolMessage.
+        
+        Args:
+            tool_call: {"name": "tool_name", "args": {...}, "id": "..."}  # LangChain format
+            user_query: Original user request
+            available_tools: Available tools for correction
+        
+        Returns:
+            {
+                "content": str,  # Clean string ready for ToolMessage
+                "success": bool,
+                "metadata": {...}
+            }
+        """
+        # Convert LangChain format ('args') to middleware format ('arguments')
+        normalized_call = {
+            "name": tool_call.get("name"),
+            "arguments": tool_call.get("args", tool_call.get("arguments", {})),
+            "id": tool_call.get("id")
+        }
+        
+        # Execute with standard method
+        result = await self.execute(normalized_call, user_query, available_tools)
+        
+        # Return LangGraph-ready format
+        return {
+            "content": self._extract_content(result),
+            "success": result["success"],
+            "metadata": result.get("metadata", {})
+        }
+    
+    def _extract_content(self, result: Dict[str, Any]) -> str:
+        """
+        Extract clean content string from execution result.
+        
+        Handles various result formats and returns a clean string
+        suitable for LangGraph ToolMessage.
+        """
+        if not result["success"]:
+            return f"Error: {result.get('error', 'Unknown error')}"
+        
+        raw_result = result.get("result")
+        
+        # Handle various result formats
+        if isinstance(raw_result, str):
+            return raw_result
+        
+        if isinstance(raw_result, dict):
+            # Try common keys
+            if "result" in raw_result:
+                return str(raw_result["result"])
+            elif "content" in raw_result:
+                return str(raw_result["content"])
+            elif "success" in raw_result and raw_result["success"]:
+                # Mock tool format - extract the actual result
+                if "result" in raw_result:
+                    return str(raw_result["result"])
+                return f"Tool executed successfully"
+            return str(raw_result)
+        
+        return str(raw_result)
+    
     async def execute(
         self,
         tool_call: Dict[str, Any],
@@ -65,6 +137,9 @@ class ProductionToolMiddleware:
     ) -> Dict[str, Any]:
         """
         Execute tool with full production safeguards.
+        
+        Note: For LangGraph integration, use execute_langchain_tool() instead.
+        This method expects middleware format with 'arguments', not 'args'.
         
         Args:
             tool_call: {"name": "tool_name", "arguments": {...}}
@@ -85,6 +160,15 @@ class ProductionToolMiddleware:
                 }
             }
         """
+        # Detect LangChain format and provide helpful warning
+        if "args" in tool_call and "arguments" not in tool_call:
+            import warnings
+            warnings.warn(
+                "Tool call uses 'args' (LangChain format) instead of 'arguments'. "
+                "For LangGraph integration, use middleware.execute_langchain_tool() "
+                "or the create_resilient_tool_node() helper from src.langgraph_integration.",
+                UserWarning
+            )
         self.execution_count += 1
         
         tool_name = tool_call.get("name", "unknown")

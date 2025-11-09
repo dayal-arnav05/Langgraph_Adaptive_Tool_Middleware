@@ -77,46 +77,25 @@ OPENAI_API_KEY=your_key_here
 
 ## LangGraph Integration
 
-Mount middleware over LangGraph tool execution:
+### Drop-in Replacement (3 Lines!)
 
 ```python
-from langgraph.graph import StateGraph
-from langchain_core.messages import ToolMessage
 from src.production_middleware import ProductionToolMiddleware
+from src.langgraph_integration import create_resilient_tool_node
 
-# Initialize middleware
-middleware = ProductionToolMiddleware(
-    enable_circuit_breaker=True,
-    enable_error_feedback=True,
-    max_retries=3
-)
+# 1. Initialize middleware
+middleware = ProductionToolMiddleware(max_retries=3)
 
-# Create resilient tool execution node
-async def execute_tools(state):
-    """Execute tools with automatic retry and recovery"""
-    tool_calls = state["messages"][-1].tool_calls
-    
-    tool_messages = []
-    for tool_call in tool_calls:
-        # Use middleware for resilient execution
-        result = await middleware.execute(
-            tool_call=tool_call,
-            user_query=state["messages"][0].content
-        )
-        
-        # Convert to LangGraph message
-        tool_messages.append(ToolMessage(
-            content=result["result"] if result["success"] else result["error"],
-            tool_call_id=tool_call["id"]
-        ))
-    
-    return {"messages": tool_messages}
+# 2. Create your graph as normal
+workflow.add_node("agent", call_model)
 
-# Add to your graph
-workflow.add_node("tools", execute_tools)
+# 3. Use resilient tool node (ONE LINE!)
+workflow.add_node("tools", create_resilient_tool_node(middleware))
+
+# That's it! Your tools now have retry, circuit breakers, and recovery.
 ```
 
-See [examples/langgraph_integration.py](examples/langgraph_integration.py) for a complete working example.
+See [examples/langgraph_quickstart.py](examples/langgraph_quickstart.py) for a complete example.
 
 ## Standalone Usage
 
